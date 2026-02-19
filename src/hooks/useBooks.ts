@@ -1,34 +1,80 @@
-import { useState, useCallback } from "react";
+
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Book, BookFormData } from "@/types/book";
-import { sampleBooks } from "@/data/sampleBooks";
+import { getBooks, createBook, updateBook, deleteBook } from "@/api/books";
+import { useToast } from "@/hooks/use-toast"; // Assuming this exists or similar
 
-/**
- * Custom hook to manage all CRUD operations for books.
- * Encapsulates state management and provides clean API for components.
- */
 export function useBooks() {
-  const [books, setBooks] = useState<Book[]>(sampleBooks);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  // CREATE: Add a new book with a unique ID
-  const addBook = useCallback((data: BookFormData) => {
-    const newBook: Book = {
-      ...data,
-      id: Date.now().toString(),
-    };
-    setBooks((prev) => [...prev, newBook]);
-  }, []);
+  const { data: books = [], isLoading, error } = useQuery({
+    queryKey: ["books"],
+    queryFn: getBooks,
+  });
 
-  // UPDATE: Replace an existing book's data by ID
-  const updateBook = useCallback((id: string, data: BookFormData) => {
-    setBooks((prev) =>
-      prev.map((book) => (book.id === id ? { ...book, ...data } : book))
-    );
-  }, []);
+  const addBookMutation = useMutation({
+    mutationFn: createBook,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["books"] });
+      toast({
+        title: "Success",
+        description: "Book added successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
-  // DELETE: Remove a book by ID
-  const deleteBook = useCallback((id: string) => {
-    setBooks((prev) => prev.filter((book) => book.id !== id));
-  }, []);
+  const updateBookMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: BookFormData }) =>
+      updateBook(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["books"] });
+      toast({
+        title: "Success",
+        description: "Book updated successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
-  return { books, addBook, updateBook, deleteBook };
+  const deleteBookMutation = useMutation({
+    mutationFn: deleteBook,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["books"] });
+      toast({
+        title: "Success",
+        description: "Book deleted successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  return {
+    books,
+    isLoading,
+    error,
+    addBook: (data: BookFormData) => addBookMutation.mutate(data),
+    updateBook: (id: string, data: BookFormData) =>
+      updateBookMutation.mutate({ id, data }),
+    deleteBook: (id: string) => deleteBookMutation.mutate(id),
+  };
 }
